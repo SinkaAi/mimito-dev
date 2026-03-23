@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inquiry #{{ inquiry.public_id }} — Mimito Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg: #0f1117; --bg-secondary: #161b22; --bg-tertiary: #1c2128;
+            --border: #21262d; --border-light: #30363d;
+            --text: #e6edf3; --text-muted: #8b949e; --text-dim: #6e7681;
+            --accent: #c8a96e; --accent-dim: rgba(200,169,110,0.15);
+            --green: #3fb950; --green-dim: rgba(63,185,80,0.15);
+            --red: #f85149; --red-dim: rgba(248,81,73,0.15);
+            --purple: #a371f7; --purple-dim: rgba(163,113,247,0.15);
+            --yellow: #d29922; --yellow-dim: rgba(210,153,34,0.15);
+            --blue: #58a6ff; --blue-dim: rgba(88,166,255,0.15);
+        }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        a { text-decoration: none; color: inherit; }
+        .header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { font-size: 15px; font-weight: 800; letter-spacing: 0.08em; color: var(--accent); text-transform: uppercase; }
+        .logo span { color: var(--text-muted); font-weight: 400; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: inherit; }
+        .btn svg { width: 14px; height: 14px; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text); border: 1px solid var(--border-light); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,81,73,0.2); }
+        .btn-danger:hover { background: rgba(248,81,73,0.25); }
+        .btn-primary { background: var(--accent); color: var(--bg); }
+        .btn-primary:hover { background: #b8954d; }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 28px 24px; }
+
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; margin-bottom: 20px; transition: color 0.15s; }
+        .back-link:hover { color: var(--text); }
+        .back-link svg { width: 14px; height: 14px; }
+
+        .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+        .page-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+        .inquiry-meta { display: flex; align-items: center; gap: 10px; }
+        .inquiry-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim); }
+        .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+        .status-new { background: var(--green-dim); color: var(--green); }
+        .status-reviewed { background: var(--blue-dim); color: var(--blue); }
+        .status-replied { background: var(--purple-dim); color: var(--purple); }
+        .status-converted { background: var(--accent-dim); color: var(--accent); }
+        .status-lost { background: rgba(139,148,158,0.1); color: var(--text-dim); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+        .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 12px; }
+        .info-row { display: flex; flex-direction: column; gap: 10px; }
+        .info-item { display: flex; flex-direction: column; gap: 2px; }
+        .info-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-value { font-size: 14px; color: var(--text); }
+        .info-value a { color: var(--blue); }
+        .info-value a:hover { text-decoration: underline; }
+
+        .message-box { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-top: 16px; }
+        .message-text { font-size: 14px; color: var(--text-muted); line-height: 1.7; white-space: pre-wrap; }
+
+        /* Items table */
+        .items-section { margin-top: 16px; }
+        .items-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .items-header { padding: 14px 20px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); }
+        .items-table { width: 100%; border-collapse: collapse; }
+        .items-table th { text-align: left; padding: 10px 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); border-bottom: 1px solid var(--border); background: var(--bg-tertiary); }
+        .items-table td { padding: 12px 20px; font-size: 13.5px; border-bottom: 1px solid var(--border); }
+        .items-table tr:last-child td { border-bottom: none; }
+        .items-table tr:hover td { background: rgba(255,255,255,0.01); }
+        .product-label { font-weight: 600; color: var(--text); }
+        .product-key { font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+
+        /* Actions panel */
+        .actions-panel { margin-top: 16px; }
+        .actions-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+        .actions-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; align-items: start; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border-radius: 7px; border: 1px solid var(--border-light); background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; }
+        .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        .danger-zone { border: 1px solid rgba(248,81,73,0.2); border-radius: 10px; padding: 20px; background: var(--red-dim); }
+        .danger-title { font-size: 12px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .danger-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+        @media (max-width: 700px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .actions-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">MIMI<span>TO</span> <span style="font-weight:400;color:var(--text-dim);font-size:11px;">ADMIN</span></div>
+        <div style="display:flex;gap:8px;">
+            <a href="/admin" class="btn btn-secondary"><i data-lucide="arrow-left"></i> All Inquiries</a>
+            <a href="/" class="btn btn-secondary"><i data-lucide="external-link"></i> View Site</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <a href="/admin" class="back-link"><i data-lucide="arrow-left"></i> Back to inquiries</a>
+
+        <div class="page-header">
+            <div>
+                <div class="page-title">Inquiry #{{ inquiry.public_id }}</div>
+                <div class="inquiry-meta">
+                    <span class="inquiry-id">{{ inquiry.created_at.strftime('%b %d, %Y at %H:%M') }}</span>
+                    <span class="status-badge status-{{ inquiry.status.lower() }}">{{ inquiry.status }}</span>
+                    <span style="font-size:11px;background:var(--bg-tertiary);padding:2px 7px;border-radius:4px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">{{ inquiry.lang|upper }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-title">Contact Information</div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="info-label">Company</span>
+                        <span class="info-value">{{ inquiry.company or '—' }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Contact Name</span>
+                        <span class="info-value">{{ inquiry.contact_name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email</span>
+                        <span class="info-value"><a href="mailto:{{ inquiry.email }}">{{ inquiry.email }}</a></span>
+                    </div>
+                    {% if inquiry.phone %}
+                    <div class="info-item">
+                        <span class="info-label">Phone</span>
+                        <span class="info-value">{{ inquiry.phone }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if inquiry.items %}
+            <div class="card">
+                <div class="card-title">Order Summary</div>
+                <div class="info-row">
+                    <div class="info-item">
+                        <span class="info-label">Total Products</span>
+                        <span class="info-value">{{ inquiry.items|length }} item{{ 's' if inquiry.items|length != 1 }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Total Quantity</span>
+                        <span class="info-value">{{ inquiry.items|sum(attribute='quantity') }} pcs</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if inquiry.message %}
+        <div class="message-box">
+            <div class="card-title">Message</div>
+            <div class="message-text">{{ inquiry.message }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Products -->
+        {% if inquiry.items %}
+        <div class="items-section">
+            <div class="items-card">
+                <div class="items-header">Configured Products</div>
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Size</th>
+                            <th>Color</th>
+                            <th>Material</th>
+                            <th>Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inquiry.items %}
+                        <tr>
+                            <td>
+                                <div class="product-label">{{ item.product_label }}</div>
+                                <div class="product-key">{{ item.product_key }}</div>
+                            </td>
+                            <td>{{ item.size }}</td>
+                            <td>{{ item.color }}</td>
+                            <td>{{ item.material }}</td>
+                            <td>{{ item.quantity }} pcs</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="actions-panel">
+            <div class="actions-grid">
+                <form method="POST" action="/admin/inquiry/{{ inquiry.id }}">
+                    <div class="actions-card">
+                        <div class="card-title">Update Status</div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status">
+                                {% for s in statuses %}
+                                <option value="{{ s }}" {% if inquiry.status == s %}selected{% endif %}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Internal Notes</label>
+                            <textarea name="notes" placeholder="Notes for this inquiry (not shown to client)...">{{ inquiry.notes or '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                            <i data-lucide="save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+
+                <div>
+                    <div class="danger-zone">
+                        <div class="danger-title">Danger Zone</div>
+                        <div class="danger-desc">Deleting an inquiry is permanent. This action cannot be undone.</div>
+                        <form method="POST" action="/admin/inquiry/{{ inquiry.id }}/delete" onsubmit="return confirm('Delete this inquiry? This cannot be undone.')">
+                            <button type="submit" class="btn btn-danger" style="width:100%;justify-content:center;">
+                                <i data-lucide="trash-2"></i> Delete Inquiry
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>
