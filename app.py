@@ -29,7 +29,52 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 # Init database
 db.init_app(app)
 
-# Translations (simplified — just the ones we need for the admin)
+# ─── Gunicorn hooks (run before first request on Railway) ──────────────────
+import os
+
+def post_fork(server, worker):
+    """Run migrations once per worker process (with file-based mutex so only one does it)."""
+    lock_file = '/tmp/mimito_migrations.lock'
+    if os.path.exists(lock_file):
+        return
+    try:
+        with app.app_context():
+            _do_migrations()
+        open(lock_file, 'w').close()
+    except Exception as e:
+        print(f"  [migrate] worker error: {e}")
+
+def worker_int(server):
+    pass
+
+def _do_migrations():
+    """Add missing columns to existing PostgreSQL tables."""
+    from sqlalchemy import text
+    try:
+        conn = db.engine.connect()
+        existing = [r[0] for r in conn.execute(text(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'"
+        )).fetchall()]
+        for col_name, sql in [
+            ("public_id", "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)"),
+            ("status",    "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'"),
+            ("notes",     "ALTER TABLE inquiries ADD COLUMN notes TEXT"),
+            ("lang",      "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'"),
+            ("updated_at","ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+            ("phone",     "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)"),
+        ]:
+            if col_name not in existing:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    print(f"  [migrate] added: {col_name}")
+                except Exception as e:
+                    print(f"  [migrate] {col_name}: {e}")
+        conn.close()
+    except Exception as e:
+        print(f"  [migrate] connection error: {e}")
+
+# ─── Translations (simplified — just the ones we need for the admin)
 TRANSLATIONS = {
     'en': {},
     'mk': {}
@@ -354,6 +399,7 @@ def run_migrations():
     # Inquiry table — add missing columns
     existing = [r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'")).fetchall()]
     migrations = [
+        ("public_id", "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)"),
         ("status", "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'"),
         ("notes", "ALTER TABLE inquiries ADD COLUMN notes TEXT"),
         ("lang", "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'"),
