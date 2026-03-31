@@ -26,6 +26,30 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mimito-dev-secret-2026'
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', '')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 
+# Admin auth
+ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'mimito2026')
+
+
+def require_admin(f):
+    """Basic auth check for admin routes."""
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+            return {'error': 'Unauthorized'}, 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+def _require_admin():
+    """Check auth and abort if not authorized."""
+    auth = request.authorization
+    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+        return {'error': 'Unauthorized'}, 401
+    return None
+
 # Init database
 db.init_app(app)
 
@@ -371,6 +395,7 @@ Language: {lang.upper()}
 # ============================================================
 
 @app.route('/admin')
+@require_admin
 def admin():
     """New CMS admin panel."""
     return render_template('admin/cms.html')
@@ -405,11 +430,17 @@ def admin_delete_inquiry(inquiry_id):
 
 @app.route('/api/products')
 def api_products():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     return jsonify(get_products())
 
 
 @app.route('/api/products/<key>', methods=['PUT'])
 def api_product_update(key):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """Update a product by key."""
     product = Product.query.filter_by(key=key).first()
     if not product:
@@ -441,6 +472,9 @@ def api_product_update(key):
 
 @app.route('/api/inquiries')
 def api_inquiries():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """API: list inquiries."""
     inquiries = Inquiry.query.order_by(Inquiry.created_at.desc()).limit(100).all()
     return jsonify([q.to_dict() for q in inquiries])
@@ -448,6 +482,9 @@ def api_inquiries():
 
 @app.route('/api/inquiry/<int:inquiry_id>/status', methods=['POST'])
 def api_update_status(inquiry_id):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     inquiry = Inquiry.query.get_or_404(inquiry_id)
     data = request.get_json()
     inquiry.status = data.get('status', inquiry.status)
@@ -459,6 +496,9 @@ def api_update_status(inquiry_id):
 
 @app.route('/api/stats')
 def api_stats():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """API: dashboard stats."""
     total = Inquiry.query.count()
     return jsonify({
@@ -477,6 +517,9 @@ def api_stats():
 
 @app.route('/api/content')
 def api_content_list():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """GET all content blocks. Returns {} fallback for missing keys."""
     blocks = {b.block_key: b for b in ContentBlock.query.all()}
     return jsonify({k: v.to_dict() for k, v in blocks.items()})
@@ -484,6 +527,9 @@ def api_content_list():
 
 @app.route('/api/content/<key>')
 def api_content_get(key):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     block = ContentBlock.query.filter_by(block_key=key).first()
     if not block:
         return jsonify({'block_key': key, 'en_text': '', 'mk_text': ''})
@@ -492,6 +538,9 @@ def api_content_get(key):
 
 @app.route('/api/content/<key>', methods=['PUT'])
 def api_content_put(key):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """Create or update a content block."""
     data = request.get_json()
     block = ContentBlock.query.filter_by(block_key=key).first()
@@ -511,6 +560,9 @@ def api_content_put(key):
 
 @app.route('/api/content/bulk', methods=['PUT'])
 def api_content_bulk():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     """Bulk update multiple content blocks at once."""
     data = request.get_json()
     updated = []
@@ -537,6 +589,9 @@ def api_content_bulk():
 
 @app.route('/api/services')
 def api_services_list():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     blocks = ServiceBlock.query.order_by(ServiceBlock.sort_order).all()
     if not blocks:
         # Fallback to hardcoded SERVICES
@@ -546,6 +601,9 @@ def api_services_list():
 
 @app.route('/api/services', methods=['POST'])
 def api_services_create():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     data = request.get_json()
     block = ServiceBlock(
         icon=data.get('icon', 'package'),
@@ -562,6 +620,9 @@ def api_services_create():
 
 @app.route('/api/services/<int:block_id>', methods=['PUT'])
 def api_services_update(block_id):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     block = ServiceBlock.query.get_or_404(block_id)
     data = request.get_json()
     block.icon = data.get('icon', block.icon)
@@ -577,6 +638,9 @@ def api_services_update(block_id):
 
 @app.route('/api/services/<int:block_id>', methods=['DELETE'])
 def api_services_delete(block_id):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     block = ServiceBlock.query.get_or_404(block_id)
     db.session.delete(block)
     db.session.commit()
@@ -587,6 +651,9 @@ def api_services_delete(block_id):
 
 @app.route('/api/config')
 def api_config_list():
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     configs = {c.key: c.value for c in SiteConfig.query.all()}
     # Always include defaults
     defaults = {
@@ -601,6 +668,9 @@ def api_config_list():
 
 @app.route('/api/config/<key>', methods=['PUT'])
 def api_config_put(key):
+    _chk = _require_admin();
+    if _chk: return _chk
+    
     config = SiteConfig.query.filter_by(key=key).first()
     if config:
         config.value = request.get_json().get('value', config.value)
