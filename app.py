@@ -48,28 +48,60 @@ def worker_int(server):
     pass
 
 def _do_migrations():
-    """Add missing columns to existing PostgreSQL tables."""
+    """Add missing columns to existing tables. Works with both SQLite (local) and PostgreSQL (Railway)."""
     from sqlalchemy import text
     try:
         conn = db.engine.connect()
-        existing = [r[0] for r in conn.execute(text(
-            "SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'"
-        )).fetchall()]
-        for col_name, sql in [
-            ("public_id", "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)"),
-            ("status",    "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'"),
-            ("notes",     "ALTER TABLE inquiries ADD COLUMN notes TEXT"),
-            ("lang",      "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'"),
-            ("updated_at","ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-            ("phone",     "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)"),
-        ]:
+        dialect = db.engine.dialect.name
+
+        # Get existing columns — different query per dialect
+        if dialect == 'postgresql':
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'"
+            ))
+            existing = [r[0] for r in result.fetchall()]
+        else:
+            # SQLite
+            result = conn.execute(text("PRAGMA table_info('inquiries')"))
+            existing = [r[1] for r in result.fetchall()]
+
+        # Migration definitions — per-dialect SQL
+        migrations = [
+            ("public_id", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)",
+            }),
+            ("status", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'",
+            }),
+            ("notes", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN notes TEXT",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN notes TEXT",
+            }),
+            ("lang", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'",
+            }),
+            ("updated_at", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            }),
+            ("phone", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)",
+            }),
+        ]
+
+        for col_name, sqls in migrations:
             if col_name not in existing:
                 try:
-                    conn.execute(text(sql))
+                    conn.execute(text(sqls[dialect]))
                     conn.commit()
                     print(f"  [migrate] added: {col_name}")
                 except Exception as e:
                     print(f"  [migrate] {col_name}: {e}")
+
         conn.close()
     except Exception as e:
         print(f"  [migrate] connection error: {e}")
@@ -392,45 +424,83 @@ def api_stats():
 # ============================================================
 
 def run_migrations():
-    """Add missing columns to existing tables (handles schema evolution)."""
+    """Add missing columns to existing tables. Works with both SQLite (local) and PostgreSQL (Railway)."""
     from sqlalchemy import text
-    conn = db.engine.connect()
+    try:
+        conn = db.engine.connect()
+        dialect = db.engine.dialect.name
 
-    # Inquiry table — add missing columns
-    existing = [r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'")).fetchall()]
-    migrations = [
-        ("public_id", "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)"),
-        ("status", "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'"),
-        ("notes", "ALTER TABLE inquiries ADD COLUMN notes TEXT"),
-        ("lang", "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'"),
-        ("updated_at", "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-        ("phone", "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)"),
-    ]
-    for col_name, sql in migrations:
-        if col_name not in existing:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-                print(f"  [migrate] Added column: {col_name}")
-            except Exception as e:
-                print(f"  [migrate] {col_name}: {e}")
+        # Get existing columns — different query per dialect
+        if dialect == 'postgresql':
+            result = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'"
+            ))
+            existing = [r[0] for r in result.fetchall()]
+            result_items = conn.execute(text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='inquiry_items'"
+            ))
+            existing_items = [r[0] for r in result_items.fetchall()]
+        else:
+            # SQLite
+            result = conn.execute(text("PRAGMA table_info('inquiries')"))
+            existing = [r[1] for r in result.fetchall()]
+            result_items = conn.execute(text("PRAGMA table_info('inquiry_items')"))
+            existing_items = [r[1] for r in result_items.fetchall()]
 
-    # InquiryItem table — add missing columns
-    existing_items = [r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='inquiry_items'")).fetchall()]
-    item_migrations = [
-        ("notes", "ALTER TABLE inquiry_items ADD COLUMN notes TEXT"),
-    ]
-    for col_name, sql in item_migrations:
-        if col_name not in existing_items:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-                print(f"  [migrate] Added column: {col_name} (items)")
-            except Exception as e:
-                print(f"  [migrate] {col_name}: {e}")
+        # Inquiry table migrations
+        migrations = [
+            ("public_id", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN public_id VARCHAR(12)",
+            }),
+            ("status", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'",
+            }),
+            ("notes", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN notes TEXT",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN notes TEXT",
+            }),
+            ("lang", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'",
+            }),
+            ("updated_at", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            }),
+            ("phone", {
+                "postgresql": "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)",
+                "sqlite":     "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)",
+            }),
+        ]
+        for col_name, sqls in migrations:
+            if col_name not in existing:
+                try:
+                    conn.execute(text(sqls[dialect]))
+                    conn.commit()
+                    print(f"  [migrate] added: {col_name}")
+                except Exception as e:
+                    print(f"  [migrate] {col_name}: {e}")
 
-    conn.close()
-    print("  [migrate] Done.")
+        # InquiryItem table migrations
+        item_migrations = [("notes", {
+            "postgresql": "ALTER TABLE inquiry_items ADD COLUMN notes TEXT",
+            "sqlite":     "ALTER TABLE inquiry_items ADD COLUMN notes TEXT",
+        })]
+        for col_name, sqls in item_migrations:
+            if col_name not in existing_items:
+                try:
+                    conn.execute(text(sqls[dialect]))
+                    conn.commit()
+                    print(f"  [migrate] added: {col_name} (items)")
+                except Exception as e:
+                    print(f"  [migrate] {col_name}: {e}")
+
+        conn.close()
+        print("  [migrate] Done.")
+    except Exception as e:
+        print(f"  [migrate] error: {e}")
 
 
 if __name__ == '__main__':
