@@ -408,6 +408,37 @@ def api_products():
     return jsonify(get_products())
 
 
+@app.route('/api/products/<key>', methods=['PUT'])
+def api_product_update(key):
+    """Update a product by key."""
+    product = Product.query.filter_by(key=key).first()
+    if not product:
+        return jsonify({'error': 'Product not found'}), 404
+    data = request.get_json()
+    if 'label' in data:
+        product.label = data['label']
+    if 'label_mk' in data:
+        product.label_mk = data['label_mk']
+    if 'description' in data:
+        product.description = data['description']
+    if 'description_mk' in data:
+        product.description_mk = data['description_mk']
+    if 'icon' in data:
+        product.icon = data['icon']
+    if 'available_sizes' in data:
+        product.available_sizes = data['available_sizes']
+    if 'available_colors' in data:
+        product.available_colors = data['available_colors']
+    if 'available_materials' in data:
+        product.available_materials = data['available_materials']
+    if 'sort_order' in data:
+        product.sort_order = int(data['sort_order'])
+    if 'available' in data:
+        product.available = bool(data['available'])
+    db.session.commit()
+    return jsonify(product.to_dict())
+
+
 @app.route('/api/inquiries')
 def api_inquiries():
     """API: list inquiries."""

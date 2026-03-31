@@ -369,6 +369,7 @@
 
 <!-- Service Modal -->
 <div id="service-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;">
+
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
       <div style="font-weight:700;font-size:1rem;">Service Card</div>
@@ -382,6 +383,27 @@
     <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
       <button class="btn btn-secondary" onclick="closeServiceModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveService()">Save Service</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div id="product-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+      <div style="font-weight:700;font-size:1rem;">Edit Product — <span id="prod-modal-key" style="color:var(--accent)"></span></div>
+      <button onclick="closeProductModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.2rem;">✕</button>
+    </div>
+    <input type="hidden" id="prod-key">
+    <div class="field-row"><div class="field"><label>Label EN</label><input id="prod-label-en"></div><div class="field"><label>Label MK</label><input id="prod-label-mk"></div></div>
+    <div class="field-row"><div class="field"><label>Description EN</label><textarea id="prod-desc-en" class="large"></textarea></div><div class="field"><label>Description MK</label><textarea id="prod-desc-mk" class="large"></textarea></div></div>
+    <div class="field-row"><div class="field"><label>Icon (Lucide name)</label><input id="prod-icon" placeholder="shirt, briefcase..."></div><div class="field"><label>Sort Order</label><input type="number" id="prod-sort" value="0"></div></div>
+    <div class="field"><label>Sizes (comma-separated)</label><input id="prod-sizes" placeholder="XS, S, M, L, XL, XXL, Custom"></div>
+    <div class="field"><label>Colors (comma-separated)</label><input id="prod-colors" placeholder="White, Navy, Black..."></div>
+    <div class="field"><label>Materials (comma-separated)</label><input id="prod-materials" placeholder="Cotton, Wool, Linen..."></div>
+    <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem;">
+      <button class="btn btn-secondary" onclick="closeProductModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Save Product</button>
     </div>
   </div>
 </div>
@@ -781,23 +803,83 @@ async function deleteService(id) {
 // ── Products ──────────────────────────────────────────────────────
 async function loadProducts() {
   const products = await fetch('/api/products').then(r => r.json());
+  _allProducts = products;  // store globally for edit modal
   const iconMap = {'shirts':'shirt','pants':'square','blazers':'briefcase','womens':'heart','bags':'shopping-bag','workwear':'hard-hat'};
   document.getElementById('products-grid').innerHTML = Object.entries(products).map(([key, p]) => `
     <div class="product-card">
-      <div class="product-card-img"><i data-lucide="${iconMap[key] || 'package'}"></i></div>
+      <div class="product-card-img"><i data-lucide="${p.icon || iconMap[key] || 'package'}"></i></div>
       <div class="product-card-body">
         <div class="product-card-title">${esc(p.label)}</div>
         <div class="product-card-title-mk">${esc(p.label_mk || '')}</div>
-        <div class="product-card-meta">${p.description?.slice(0,80)}...</div>
+        <div class="product-card-meta">${(p.description || '').slice(0,80)}${(p.description || '').length > 80 ? '...' : ''}</div>
         <div style="margin-top:0.5rem">
-          <span class="product-tag">${p.sizes?.length || 0} sizes</span>
-          <span class="product-tag">${p.colors?.length || 0} colors</span>
-          <span class="product-tag">${p.materials?.length || 0} materials</span>
+          <span class="product-tag">${(p.sizes || []).length} sizes</span>
+          <span class="product-tag">${(p.colors || []).length} colors</span>
+          <span class="product-tag">${(p.materials || []).length} materials</span>
+        </div>
+        <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="openProductModal('${key}')"><i data-lucide="edit-2" style="width:13px;height:13px"></i> Edit</button>
         </div>
       </div>
     </div>
   `).join('');
   lucide.createIcons();
+}
+
+let _allProducts = {};
+
+function openProductModal(key) {
+  const p = _allProducts[key];
+  if (!p) return;
+  document.getElementById('prod-key').value = key;
+  document.getElementById('prod-modal-key').textContent = key;
+  document.getElementById('prod-label-en').value = p.label || '';
+  document.getElementById('prod-label-mk').value = p.label_mk || '';
+  document.getElementById('prod-desc-en').value = p.description || '';
+  document.getElementById('prod-desc-mk').value = p.description_mk || '';
+  document.getElementById('prod-icon').value = p.icon || '';
+  document.getElementById('prod-sort').value = p.sort_order || 0;
+  document.getElementById('prod-sizes').value = (p.sizes || []).join(', ');
+  document.getElementById('prod-colors').value = (p.colors || []).join(', ');
+  document.getElementById('prod-materials').value = (p.materials || []).join(', ');
+  document.getElementById('product-modal').style.display = 'flex';
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').style.display = 'none';
+}
+
+async function saveProduct() {
+  const key = document.getElementById('prod-key').value;
+  const sizesRaw = document.getElementById('prod-sizes').value;
+  const colorsRaw = document.getElementById('prod-colors').value;
+  const materialsRaw = document.getElementById('prod-materials').value;
+
+  const payload = {
+    label: document.getElementById('prod-label-en').value,
+    label_mk: document.getElementById('prod-label-mk').value,
+    description: document.getElementById('prod-desc-en').value,
+    description_mk: document.getElementById('prod-desc-mk').value,
+    icon: document.getElementById('prod-icon').value,
+    sort_order: parseInt(document.getElementById('prod-sort').value) || 0,
+    available_sizes: JSON.stringify(sizesRaw.split(',').map(s => s.trim()).filter(Boolean)),
+    available_colors: JSON.stringify(colorsRaw.split(',').map(s => s.trim()).filter(Boolean)),
+    available_materials: JSON.stringify(materialsRaw.split(',').map(s => s.trim()).filter(Boolean)),
+  };
+
+  const res = await fetch(`/api/products/${key}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+
+  if (res.ok) {
+    closeProductModal();
+    showToast('Product saved!');
+    loadProducts();
+  } else {
+    showToast('Save failed', true);
+  }
 }
 
 // ── Config ────────────────────────────────────────────────────────
