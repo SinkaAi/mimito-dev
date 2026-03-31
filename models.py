@@ -180,3 +180,71 @@ def seed_products():
         db.session.add(p)
     db.session.commit()
     print("[db] Seeded 6 default products")
+
+
+# ─── Content Blocks (CMS) ─────────────────────────────────────────────────────
+
+class ContentBlock(db.Model):
+    """Editable translatable text content for the site."""
+    __tablename__ = 'content_blocks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    block_key = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    en_text = db.Column(db.Text, default='')
+    mk_text = db.Column(db.Text, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'block_key': self.block_key,
+            'en_text': self.en_text,
+            'mk_text': self.mk_text,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ServiceBlock(db.Model):
+    """Editable service cards."""
+    __tablename__ = 'service_blocks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    icon = db.Column(db.String(50), default='package')
+    title_en = db.Column(db.String(200), nullable=False)
+    title_mk = db.Column(db.String(200), default='')
+    desc_en = db.Column(db.Text, default='')
+    desc_mk = db.Column(db.Text, default='')
+    sort_order = db.Column(db.Integer, default=0)
+    available = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'icon': self.icon,
+            'title_en': self.title_en,
+            'title_mk': self.title_mk,
+            'desc_en': self.desc_en,
+            'desc_mk': self.desc_mk,
+            'sort_order': self.sort_order,
+            'available': self.available,
+        }
+
+
+class SiteConfig(db.Model):
+    """Non-translatable site settings."""
+    __tablename__ = 'site_config'
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    value = db.Column(db.Text, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

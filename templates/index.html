@@ -293,11 +293,11 @@
                 <p class="section-sub">{{ t('services_subtitle') }}</p>
             </div>
             <div class="services-grid">
-                {% for service in services %}
+                {% for service in services_db %}
                 <div class="service-card fade-in">
                     <div class="service-icon"><i data-lucide="{{ service.icon }}"></i></div>
-                    <h3>{{ t(service.title_key) }}</h3>
-                    <p>{{ t(service.desc_key) }}</p>
+                    <h3>{{ service._title_en if lang == 'en' else service._title_mk }}</h3>
+                    <p>{{ service._desc_en if lang == 'en' else service._desc_mk }}</p>
                 </div>
                 {% endfor %}
             </div>

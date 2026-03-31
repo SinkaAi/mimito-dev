@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from models import db, Inquiry, InquiryItem, Product, init_db, seed_products
+from models import db, Inquiry, InquiryItem, Product, ContentBlock, ServiceBlock, SiteConfig, init_db, seed_products
 
 app = Flask(__name__)
 
@@ -210,18 +210,66 @@ def inject_translations():
     lang = request.args.get('lang', 'en')
     if lang not in TRANSLATIONS:
         lang = 'en'
+    # Build content blocks dict from DB — overrides translations.py defaults
+    content = {}
+    try:
+        for b in ContentBlock.query.all():
+            content[b.block_key] = b.en_text if lang == 'en' else b.mk_text
+    except Exception:
+        pass  # Table might not exist yet during first migration
+
+    def t(key):
+        # DB content overrides translations.py
+        if key in content and content[key]:
+            return content[key]
+        return get_text(lang, key)
+
     return dict(
-        t=lambda key: get_text(lang, key),
+        t=t,
         lang=lang,
-        languages=[{'code': 'en', 'label': 'EN'}, {'code': 'mk', 'label': 'MK'}]
+        languages=[{'code': 'en', 'label': 'EN'}, {'code': 'mk', 'label': 'MK'}],
+        services_db=_get_services_db(lang),
+        config_db=_get_config_db(),
     )
+
+
+def _get_services_db(lang):
+    """Get service blocks from DB, fallback to hardcoded."""
+    try:
+        blocks = ServiceBlock.query.filter_by(available=True).order_by(ServiceBlock.sort_order).all()
+        if blocks:
+            return [{'icon': b.icon,
+                     'title_key': f'_svc_{b.id}',
+                     'desc_key': f'_svcd_{b.id}',
+                     '_title_en': b.title_en, '_title_mk': b.title_mk,
+                     '_desc_en': b.desc_en, '_desc_mk': b.desc_mk}
+                    for b in blocks]
+    except Exception:
+        pass
+    return SERVICES
+
+
+def _get_config_db():
+    """Get site config from DB."""
+    try:
+        return {c.key: c.value for c in SiteConfig.query.all()}
+    except Exception:
+        return {}
+
+
+# Monkey-patch the t() inside service templates — we handle services specially
+@app.context_processor
+def override_service_templates():
+    return {}
 
 
 @app.route('/')
 def home():
     products = get_products()
     lang = request.args.get('lang', 'en')
-    return render_template('index.html', products=products, services=SERVICES, lang=lang)
+    services = _get_services_db(lang)
+    config = _get_config_db()
+    return render_template('index.html', products=products, services_db=services, lang=lang, config_db=config)
 
 
 @app.route('/api/inquiry', methods=['POST'])
@@ -312,45 +360,8 @@ Language: {lang.upper()}
 
 @app.route('/admin')
 def admin():
-    """Admin dashboard — list all inquiries."""
-    status_filter = request.args.get('status', '')
-    search = request.args.get('search', '').strip()
-    sort = request.args.get('sort', 'newest')
-
-    query = Inquiry.query
-    if status_filter:
-        query = query.filter_by(status=status_filter)
-    if search:
-        query = query.filter(
-            (Inquiry.contact_name.ilike(f'%{search}%')) |
-            (Inquiry.company.ilike(f'%{search}%')) |
-            (Inquiry.email.ilike(f'%{search}%')) |
-            (Inquiry.public_id.ilike(f'%{search}%'))
-        )
-    if sort == 'newest':
-        query = query.order_by(Inquiry.created_at.desc())
-    elif sort == 'oldest':
-        query = query.order_by(Inquiry.created_at.asc())
-    elif sort == 'company':
-        query = query.order_by(Inquiry.company.asc())
-    else:
-        query = query.order_by(Inquiry.created_at.desc())
-
-    inquiries = query.all()
-    stats = {
-        'total': Inquiry.query.count(),
-        'new': Inquiry.query.filter_by(status='New').count(),
-        'reviewed': Inquiry.query.filter_by(status='Reviewed').count(),
-        'converted': Inquiry.query.filter_by(status='Converted').count(),
-        'lost': Inquiry.query.filter_by(status='Lost').count(),
-    }
-    return render_template('admin/index.html',
-                           inquiries=inquiries,
-                           stats=stats,
-                           status_filter=status_filter,
-                           search=search,
-                           sort=sort,
-                           statuses=INQUIRY_STATUSES)
+    """New CMS admin panel."""
+    return render_template('admin/cms.html')
 
 
 @app.route('/admin/inquiry/<int:inquiry_id>')
@@ -417,6 +428,172 @@ def api_stats():
             Inquiry.created_at >= datetime.now(tz.utc).replace(hour=0, minute=0, second=0)
         ).count()
     })
+
+
+# ─── Content Blocks API ────────────────────────────────────────────────────────
+
+@app.route('/api/content')
+def api_content_list():
+    """GET all content blocks. Returns {} fallback for missing keys."""
+    blocks = {b.block_key: b for b in ContentBlock.query.all()}
+    return jsonify({k: v.to_dict() for k, v in blocks.items()})
+
+
+@app.route('/api/content/<key>')
+def api_content_get(key):
+    block = ContentBlock.query.filter_by(block_key=key).first()
+    if not block:
+        return jsonify({'block_key': key, 'en_text': '', 'mk_text': ''})
+    return jsonify(block.to_dict())
+
+
+@app.route('/api/content/<key>', methods=['PUT'])
+def api_content_put(key):
+    """Create or update a content block."""
+    data = request.get_json()
+    block = ContentBlock.query.filter_by(block_key=key).first()
+    if block:
+        block.en_text = data.get('en_text', block.en_text)
+        block.mk_text = data.get('mk_text', block.mk_text)
+    else:
+        block = ContentBlock(
+            block_key=key,
+            en_text=data.get('en_text', ''),
+            mk_text=data.get('mk_text', '')
+        )
+        db.session.add(block)
+    db.session.commit()
+    return jsonify(block.to_dict())
+
+
+@app.route('/api/content/bulk', methods=['PUT'])
+def api_content_bulk():
+    """Bulk update multiple content blocks at once."""
+    data = request.get_json()
+    updated = []
+    for key, vals in data.items():
+        block = ContentBlock.query.filter_by(block_key=key).first()
+        if block:
+            if 'en_text' in vals:
+                block.en_text = vals['en_text']
+            if 'mk_text' in vals:
+                block.mk_text = vals['mk_text']
+        else:
+            block = ContentBlock(
+                block_key=key,
+                en_text=vals.get('en_text', ''),
+                mk_text=vals.get('mk_text', '')
+            )
+            db.session.add(block)
+        updated.append(key)
+    db.session.commit()
+    return jsonify({'updated': updated})
+
+
+# ─── Service Blocks API ───────────────────────────────────────────────────────
+
+@app.route('/api/services')
+def api_services_list():
+    blocks = ServiceBlock.query.order_by(ServiceBlock.sort_order).all()
+    if not blocks:
+        # Fallback to hardcoded SERVICES
+        return jsonify(SERVICES_FALLBACK)
+    return jsonify([b.to_dict() for b in blocks])
+
+
+@app.route('/api/services', methods=['POST'])
+def api_services_create():
+    data = request.get_json()
+    block = ServiceBlock(
+        icon=data.get('icon', 'package'),
+        title_en=data.get('title_en', ''),
+        title_mk=data.get('title_mk', ''),
+        desc_en=data.get('desc_en', ''),
+        desc_mk=data.get('desc_mk', ''),
+        sort_order=data.get('sort_order', 0),
+    )
+    db.session.add(block)
+    db.session.commit()
+    return jsonify(block.to_dict())
+
+
+@app.route('/api/services/<int:block_id>', methods=['PUT'])
+def api_services_update(block_id):
+    block = ServiceBlock.query.get_or_404(block_id)
+    data = request.get_json()
+    block.icon = data.get('icon', block.icon)
+    block.title_en = data.get('title_en', block.title_en)
+    block.title_mk = data.get('title_mk', block.title_mk)
+    block.desc_en = data.get('desc_en', block.desc_en)
+    block.desc_mk = data.get('desc_mk', block.desc_mk)
+    block.sort_order = data.get('sort_order', block.sort_order)
+    block.available = data.get('available', block.available)
+    db.session.commit()
+    return jsonify(block.to_dict())
+
+
+@app.route('/api/services/<int:block_id>', methods=['DELETE'])
+def api_services_delete(block_id):
+    block = ServiceBlock.query.get_or_404(block_id)
+    db.session.delete(block)
+    db.session.commit()
+    return jsonify({'deleted': True})
+
+
+# ─── Site Config API ───────────────────────────────────────────────────────────
+
+@app.route('/api/config')
+def api_config_list():
+    configs = {c.key: c.value for c in SiteConfig.query.all()}
+    # Always include defaults
+    defaults = {
+        'company_email': 'info@mimito.com',
+        'company_phone': '+389 XX XXX XXXX',
+        'company_location': 'Štip, North Macedonia',
+        'working_with': 'Germany · EU · Worldwide',
+    }
+    defaults.update(configs)
+    return jsonify(defaults)
+
+
+@app.route('/api/config/<key>', methods=['PUT'])
+def api_config_put(key):
+    config = SiteConfig.query.filter_by(key=key).first()
+    if config:
+        config.value = request.get_json().get('value', config.value)
+    else:
+        config = SiteConfig(key=key, value=request.get_json().get('value', ''))
+        db.session.add(config)
+    db.session.commit()
+    return jsonify(config.to_dict())
+
+
+SERVICES_FALLBACK = [
+    {'icon': 'scissors', 'title_en': 'Custom Tailoring', 'title_mk': 'Custom Шиење',
+     'desc_en': 'Every garment made to your exact measurements and specifications.',
+     'desc_mk': 'Секое парче облека изработено според вашите точни мерки и спецификации.',
+     'sort_order': 0},
+    {'icon': 'globe', 'title_en': 'EU Export Ready', 'title_mk': 'Подготвено за ЕУ',
+     'desc_en': 'Years of experience exporting quality garments to Germany and the EU.',
+     'desc_mk': 'Години искуство во извоз на квалитетна облека во Германија и ЕУ.',
+     'sort_order': 1},
+    {'icon': 'package', 'title_en': 'Any Quantity', 'title_mk': 'Било каква Количина',
+     'desc_en': 'Flexible MOQ — from small batches to large-scale production runs.',
+     'desc_mk': 'Флексибилен МОК — од мали серии до големи производствени капацитети.',
+     'sort_order': 2},
+    {'icon': 'clock', 'title_en': 'Fast Turnaround', 'title_mk': 'Брза Испорака',
+     'desc_en': 'Reliable production timelines with clear milestones and updates.',
+     'desc_mk': 'Сигурни производствени рокови со јасни милстоуни и ажурирања.',
+     'sort_order': 3},
+    {'icon': 'award', 'title_en': 'Quality Materials', 'title_mk': 'Квалитетни Материјали',
+     'desc_en': 'Premium fabrics sourced from trusted European suppliers.',
+     'desc_mk': 'Премиум ткаенини од доверени европски добавувачи.',
+     'sort_order': 4},
+    {'icon': 'message-circle', 'title_en': 'Direct Communication', 'title_mk': 'Директна Комуникација',
+     'desc_en': 'Personal point of contact throughout the entire production process.',
+     'desc_mk': 'Личен контакт во текот на целиот производствен процес.',
+     'sort_order': 5},
+]
 
 
 # ============================================================
