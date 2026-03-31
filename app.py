@@ -215,11 +215,23 @@ def inject_translations():
     try:
         for b in ContentBlock.query.all():
             content[b.block_key] = b.en_text if lang == 'en' else b.mk_text
+        # Also merge SiteConfig — map internal keys to translation key names
+        site_config = {c.key: c.value for c in SiteConfig.query.all()}
+        # Map SiteConfig keys → translation key names used in template
+        config_key_map = {
+            'company_email':    'contact_email_val',
+            'company_phone':    'contact_phone_val',
+            'company_location':  'contact_location_val',
+            'working_with':     'contact_working_val',
+        }
+        for db_key, display_key in config_key_map.items():
+            if db_key in site_config and site_config[db_key]:
+                content[display_key] = site_config[db_key]
     except Exception:
         pass  # Table might not exist yet during first migration
 
     def t(key):
-        # DB content overrides translations.py
+        # DB content (ContentBlock + SiteConfig) overrides translations.py
         if key in content and content[key]:
             return content[key]
         return get_text(lang, key)

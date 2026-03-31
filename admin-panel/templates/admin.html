@@ -491,7 +491,9 @@ function jumpToContent(key) {
   }, 100);
 }
 
-// ── Contentasync function loadContentBlocks() {
+// ── Content
+
+async function loadContentBlocks() {
   contentBlocks = await fetch('/api/content').then(r => r.json());
   originalContent = JSON.parse(JSON.stringify(contentBlocks));
   renderContentBlocks();
@@ -890,3 +892,4 @@ function showToast(msg, isError = false) {
   t.className = 'toast' + (isError ? ' error' : '') + ' show';
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+</script></html>
