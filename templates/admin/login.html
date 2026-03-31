@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mimito Admin — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0e17;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .login-box {
+    background: #111827;
+    border: 1px solid #1e2a3e;
+    border-radius: 14px;
+    padding: 2.5rem 2rem;
+    width: 360px;
+    text-align: center;
+  }
+  .logo {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.3rem;
+    color: #e2e8f0;
+  }
+  .logo span { color: #c8a96e; }
+  .subtitle { font-size: 0.78rem; color: #4a5c73; margin-bottom: 2rem; text-transform: uppercase; letter-spacing: 0.1em; }
+  .field { margin-bottom: 1rem; text-align: left; }
+  label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8896ab; font-weight: 600; margin-bottom: 0.4rem; }
+  input {
+    width: 100%; padding: 0.65rem 0.85rem;
+    border: 1px solid #1e2a3e; border-radius: 8px;
+    background: #0a0e17; color: #e2e8f0;
+    font-family: inherit; font-size: 0.9rem;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: #c8a96e; }
+  .btn {
+    width: 100%; padding: 0.7rem; border-radius: 8px;
+    border: none; cursor: pointer;
+    font-family: inherit; font-size: 0.88rem; font-weight: 600;
+    margin-top: 0.5rem;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: #c8a96e; color: #0a0e17; }
+  .btn-primary:hover { background: #d4b87a; }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .error { color: #ef4444; font-size: 0.8rem; margin-top: 0.75rem; display: none; }
+  .error.show { display: block; }
+  .spinner { display: none; width: 16px; height: 16px; border: 2px solid #0a0e17; border-top-color: #0a0e17; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto; }
+  .loading .spinner { display: block; }
+  .loading .btn-text { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <div class="logo">MIMI<span>TO</span></div>
+  <div class="subtitle">Admin Login</div>
+
+  <div id="loginForm">
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="admin" autocomplete="username" autofocus>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">
+      <span class="btn-text">Sign In</span>
+      <div class="spinner"></div>
+    </button>
+    <div class="error" id="errorMsg">Invalid username or password</div>
+  </div>
+</div>
+
+<script>
+async function doLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('errorMsg');
+  err.classList.remove('show');
+
+  if (!username || !password) {
+    err.textContent = 'Please enter username and password';
+    err.classList.add('show');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+
+    if (res.ok) {
+      window.location.href = '/admin';
+    } else {
+      err.textContent = 'Invalid username or password';
+      err.classList.add('show');
+      btn.disabled = false;
+      btn.classList.remove('loading');
+    }
+  } catch(e) {
+    err.textContent = 'Connection error. Is the server running?';
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  }
+}
+
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>

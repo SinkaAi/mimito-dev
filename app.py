@@ -6,7 +6,7 @@ import uuid
 import smtplib
 import json
 from datetime import datetime, timezone as tz
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 from flask_sqlalchemy import SQLAlchemy
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -29,26 +29,25 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', '')
 # Admin auth
 ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
 ADMIN_PASS = os.environ.get('ADMIN_PASS', 'mimito2026')
+ADMIN_SESSION_KEY = '_mimito_admin_auth'
 
 
 def require_admin(f):
-    """Basic auth check for admin routes."""
+    """Session-based auth check for admin routes."""
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-            return {'error': 'Unauthorized'}, 401
-        return f(*args, **kwargs)
+        if session.get(ADMIN_SESSION_KEY):
+            return f(*args, **kwargs)
+        return {'error': 'Unauthorized'}, 401
     return decorated
 
 
 def _require_admin():
-    """Check auth and abort if not authorized."""
-    auth = request.authorization
-    if not auth or auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
-        return {'error': 'Unauthorized'}, 401
-    return None
+    """Check session auth and abort if not authorized."""
+    if session.get(ADMIN_SESSION_KEY):
+        return None
+    return {'error': 'Unauthorized'}, 401
 
 # Init database
 db.init_app(app)
@@ -391,13 +390,34 @@ Language: {lang.upper()}
 
 
 # ============================================================
+# ============================================================
+# ADMIN AUTH
+# ============================================================
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    if data.get('username') == ADMIN_USER and data.get('password') == ADMIN_PASS:
+        session[ADMIN_SESSION_KEY] = True
+        return jsonify({'ok': True})
+    return {'error': 'Invalid credentials'}, 401
+
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop(ADMIN_SESSION_KEY, None)
+    return jsonify({'ok': True})
+
+
+# ============================================================
 # ADMIN ROUTES
 # ============================================================
 
 @app.route('/admin')
-@require_admin
 def admin():
-    """New CMS admin panel."""
+    """New CMS admin panel — shows login if not authenticated."""
+    if not session.get(ADMIN_SESSION_KEY):
+        return render_template('admin/login.html')
     return render_template('admin/cms.html')
 
 
