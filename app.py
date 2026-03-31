@@ -346,10 +346,52 @@ def api_stats():
 # INIT
 # ============================================================
 
+def run_migrations():
+    """Add missing columns to existing tables (handles schema evolution)."""
+    from sqlalchemy import text
+    conn = db.engine.connect()
+
+    # Inquiry table — add missing columns
+    existing = [r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='inquiries'")).fetchall()]
+    migrations = [
+        ("status", "ALTER TABLE inquiries ADD COLUMN status VARCHAR(50) DEFAULT 'New'"),
+        ("notes", "ALTER TABLE inquiries ADD COLUMN notes TEXT"),
+        ("lang", "ALTER TABLE inquiries ADD COLUMN lang VARCHAR(5) DEFAULT 'en'"),
+        ("updated_at", "ALTER TABLE inquiries ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("phone", "ALTER TABLE inquiries ADD COLUMN phone VARCHAR(50)"),
+    ]
+    for col_name, sql in migrations:
+        if col_name not in existing:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+                print(f"  [migrate] Added column: {col_name}")
+            except Exception as e:
+                print(f"  [migrate] {col_name}: {e}")
+
+    # InquiryItem table — add missing columns
+    existing_items = [r[0] for r in conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='inquiry_items'")).fetchall()]
+    item_migrations = [
+        ("notes", "ALTER TABLE inquiry_items ADD COLUMN notes TEXT"),
+    ]
+    for col_name, sql in item_migrations:
+        if col_name not in existing_items:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+                print(f"  [migrate] Added column: {col_name} (items)")
+            except Exception as e:
+                print(f"  [migrate] {col_name}: {e}")
+
+    conn.close()
+    print("  [migrate] Done.")
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5005))
     with app.app_context():
         db.create_all()
+        run_migrations()
         # Seed default products if none exist
         if Product.query.count() == 0:
             seed_products()
